@@ -10,88 +10,88 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-      
-    - name: Setup Node.js
-      uses: actions/setup-node@v4
-      with:
-        node-version: '22'
-        cache: 'npm'
+      - name: Checkout code
+        uses: actions/checkout@v4
         
-    - name: Install dependencies
-      run: npm ci
-
-    - name: Build application
-      run: npm run build
-      env:
-        NODE_OPTIONS: --max-old-space-size=4096
-        
-    - name: Deploy to Vercel (Production)
-      if: (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master') && secrets.VERCEL_TOKEN != ''
-      uses: amondnet/vercel-action@v25
-      with:
-        vercel-token: ${{ secrets.VERCEL_TOKEN }}
-        vercel-args: '--prod'
-        vercel-org-id: ${{ secrets.VERCEL_ORG_ID }}
-        vercel-project-id: ${{ secrets.VERCEL_PROJECT_ID }}
-        
-    - name: Deploy to Vercel (Preview)
-      if: (github.ref != 'refs/heads/main' && github.ref != 'refs/heads/master') && secrets.VERCEL_TOKEN != ''
-      uses: amondnet/vercel-action@v25
-      with:
-        vercel-token: ${{ secrets.VERCEL_TOKEN }}
-        vercel-args: '--no-wait'
-        vercel-org-id: ${{ secrets.VERCEL_ORG_ID }}
-        vercel-project-id: ${{ secrets.VERCEL_PROJECT_ID }}
-        
-    - name: Deployment Status
-      run: |
-        if [ -z "${{ secrets.VERCEL_TOKEN }}" ]; then
-          echo "ℹ️ Vercel deployment skipped - VERCEL_TOKEN not configured"
-          echo "✅ Build completed successfully! The application is ready for deployment."
-          echo "📦 Built files are available in the 'dist' directory"
-        else
-          echo "🚀 Vercel deployment completed!"
-        fi
-        
-    - name: Comment PR with deployment status
-      if: github.event_name == 'pull_request'
-      uses: actions/github-script@v7
-      with:
-        script: |
-          const hasVercelToken = '${{ secrets.VERCEL_TOKEN }}' !== '';
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
           
-          if (hasVercelToken) {
-            // Try to get deployment URL from Vercel
-            try {
-              const { data: deployments } = await github.rest.repos.listDeployments({
-                owner: context.repo.owner,
-                repo: context.repo.repo
-              });
-              const latestDeployment = deployments[0];
-              if (latestDeployment) {
-                const deploymentUrl = `https://${latestDeployment.environment}.vercel.app`;
-                await github.rest.issues.createComment({
-                  issue_number: context.issue.number,
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build application
+        run: npm run build
+        env:
+          NODE_OPTIONS: --max-old-space-size=4096
+          
+      - name: Deploy to Vercel (Production)
+        if: (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master') && secrets.VERCEL_TOKEN != ''
+        uses: amondnet/vercel-action@v25
+        with:
+          vercel-token: ${{ secrets.VERCEL_TOKEN }}
+          vercel-args: '--prod'
+          vercel-org-id: ${{ secrets.VERCEL_ORG_ID }}
+          vercel-project-id: ${{ secrets.VERCEL_PROJECT_ID }}
+          
+      - name: Deploy to Vercel (Preview)
+        if: (github.ref != 'refs/heads/main' && github.ref != 'refs/heads/master') && secrets.VERCEL_TOKEN != ''
+        uses: amondnet/vercel-action@v25
+        with:
+          vercel-token: ${{ secrets.VERCEL_TOKEN }}
+          vercel-args: '--no-wait'
+          vercel-org-id: ${{ secrets.VERCEL_ORG_ID }}
+          vercel-project-id: ${{ secrets.VERCEL_PROJECT_ID }}
+          
+      - name: Deployment Status
+        run: |
+          if [ -z "${{ secrets.VERCEL_TOKEN }}" ]; then
+            echo "ℹ️ Vercel deployment skipped - VERCEL_TOKEN not configured"
+            echo "✅ Build completed successfully! The application is ready for deployment."
+            echo "📦 Built files are available in the 'dist' directory"
+          else
+            echo "🚀 Vercel deployment completed!"
+          fi
+          
+      - name: Comment PR with deployment status
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const hasVercelToken = '${{ secrets.VERCEL_TOKEN }}' !== '';
+            
+            if (hasVercelToken) {
+              // Try to get deployment URL from Vercel
+              try {
+                const { data: deployments } = await github.rest.repos.listDeployments({
                   owner: context.repo.owner,
-                  repo: context.repo.repo,
-                  body: `🚀 **Preview Deployment Ready!**
-                  \n\n📱 **URL:** ${deploymentUrl}
-                  \n\nThis preview will be automatically updated when you push new commits to this PR.`
+                  repo: context.repo.repo
                 });
+                const latestDeployment = deployments[0];
+                if (latestDeployment) {
+                  const deploymentUrl = `https://${latestDeployment.environment}.vercel.app`;
+                  await github.rest.issues.createComment({
+                    issue_number: context.issue.number,
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                    body: `🚀 **Preview Deployment Ready!**
+                    \n\n📱 **URL:** ${deploymentUrl}
+                    \n\nThis preview will be automatically updated when you push new commits to this PR.`
+                  });
+                }
+              } catch (error) {
+                console.log('Could not fetch deployment URL, but deployment may still be successful');
               }
-            } catch (error) {
-              console.log('Could not fetch deployment URL, but deployment may still be successful');
+            } else {
+              // No Vercel token configured
+              await github.rest.issues.createComment({
+                issue_number: context.issue.number,
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                body: `✅ **Build Completed Successfully!**
+                \n\n📦 The application has been built and is ready for deployment.
+                \n\nℹ️ *Vercel deployment is not configured for this repository. To enable automatic deployments, add the required Vercel secrets to the repository settings.*`
+              });
             }
-          } else {
-            // No Vercel token configured
-            await github.rest.issues.createComment({
-              issue_number: context.issue.number,
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              body: `✅ **Build Completed Successfully!**
-              \n\n📦 The application has been built and is ready for deployment.
-              \n\nℹ️ *Vercel deployment is not configured for this repository. To enable automatic deployments, add the required Vercel secrets to the repository settings.*`
-            });
-          }
