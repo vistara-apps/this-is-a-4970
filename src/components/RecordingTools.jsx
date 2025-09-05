@@ -1,51 +1,37 @@
-import React, { useState, useRef } from 'react'
+import React, { useEffect } from 'react'
 import { Mic, Square, Play, Pause, Download, FileText, Share } from 'lucide-react'
+import { useRecordingStore, useAppStore } from '../store'
+import { scriptService } from '../lib/openai'
 
 const RecordingTools = ({ selectedState }) => {
-  const [isRecording, setIsRecording] = useState(false)
-  const [isPaused, setIsPaused] = useState(false)
-  const [recordingTime, setRecordingTime] = useState(0)
-  const [notes, setNotes] = useState('')
-  const [recordings, setRecordings] = useState([])
-  const intervalRef = useRef(null)
+  const {
+    isRecording,
+    isPaused,
+    recordingTime,
+    recordings,
+    currentNotes,
+    startRecording,
+    pauseRecording,
+    resumeRecording,
+    stopRecording,
+    setNotes,
+    loadUserRecordings
+  } = useRecordingStore()
 
-  const startRecording = () => {
-    setIsRecording(true)
-    setRecordingTime(0)
-    intervalRef.current = setInterval(() => {
-      setRecordingTime(prev => prev + 1)
-    }, 1000)
-  }
+  const { user } = useAppStore()
 
-  const stopRecording = () => {
-    setIsRecording(false)
-    setIsPaused(false)
-    if (intervalRef.current) {
-      clearInterval(intervalRef.current)
+  // Load user recordings on component mount
+  useEffect(() => {
+    if (user) {
+      loadUserRecordings()
     }
-    
-    // Create mock recording
-    const newRecording = {
-      id: Date.now(),
-      timestamp: new Date().toISOString(),
-      duration: recordingTime,
-      notes: notes,
-      location: selectedState
-    }
-    
-    setRecordings(prev => [newRecording, ...prev])
-    setNotes('')
-    setRecordingTime(0)
-  }
+  }, [user, loadUserRecordings])
 
   const togglePause = () => {
-    setIsPaused(!isPaused)
     if (isPaused) {
-      intervalRef.current = setInterval(() => {
-        setRecordingTime(prev => prev + 1)
-      }, 1000)
+      resumeRecording()
     } else {
-      clearInterval(intervalRef.current)
+      pauseRecording()
     }
   }
 
@@ -55,23 +41,33 @@ const RecordingTools = ({ selectedState }) => {
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`
   }
 
-  const generateSummaryCard = (recording) => {
-    const summaryData = {
-      timestamp: new Date(recording.timestamp).toLocaleString(),
-      location: recording.location,
-      duration: formatTime(recording.duration),
-      notes: recording.notes,
-      rights: [
-        "Right to remain silent was exercised",
-        "Right to record interaction in public space",
-        "Did not consent to searches",
-        "Requested legal representation"
-      ]
+  const generateSummaryCard = async (recording) => {
+    try {
+      const summaryData = {
+        timestamp: new Date(recording.timestamp).toLocaleString(),
+        location: recording.location,
+        duration: formatTime(recording.duration),
+        notes: recording.notes
+      }
+      
+      const summary = await scriptService.generateSummaryCard(summaryData)
+      
+      // Create a downloadable text file
+      const blob = new Blob([summary], { type: 'text/plain' })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `interaction-summary-${new Date(recording.timestamp).toISOString().split('T')[0]}.txt`
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      URL.revokeObjectURL(url)
+      
+      alert('Summary card generated and downloaded!')
+    } catch (error) {
+      console.error('Error generating summary:', error)
+      alert('Error generating summary card. Please try again.')
     }
-    
-    // In a real app, this would generate a shareable summary
-    console.log('Summary Card Generated:', summaryData)
-    alert('Summary card generated! (This would normally create a downloadable summary)')
   }
 
   return (
@@ -132,7 +128,7 @@ const RecordingTools = ({ selectedState }) => {
             Add Notes (Optional)
           </label>
           <textarea
-            value={notes}
+            value={currentNotes}
             onChange={(e) => setNotes(e.target.value)}
             className="w-full p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-primary focus:border-transparent resize-none"
             rows="3"

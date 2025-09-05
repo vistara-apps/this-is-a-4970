@@ -1,11 +1,16 @@
 import React, { useState } from 'react'
 import { MessageSquare, Loader2, Copy, Globe } from 'lucide-react'
+import { scriptService } from '../lib/openai'
+import { useAppStore } from '../store'
 
 const ScriptGenerator = ({ selectedState, language }) => {
   const [scenario, setScenario] = useState('')
   const [generatedScript, setGeneratedScript] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const [selectedLanguage, setSelectedLanguage] = useState(language || 'en')
+  const [customContext, setCustomContext] = useState('')
+
+  const { user } = useAppStore()
 
   const scenarios = [
     { id: 'traffic-stop', label: 'Traffic Stop' },
@@ -26,33 +31,12 @@ const ScriptGenerator = ({ selectedState, language }) => {
     setIsLoading(true)
     
     try {
-      // Simulate API call to OpenAI
-      await new Promise(resolve => setTimeout(resolve, 2000))
-      
-      const scripts = {
-        'traffic-stop': {
-          en: `"Good evening, officer. I understand you've stopped me. Am I free to leave? I choose to remain silent and would like to speak with an attorney. I do not consent to any searches of my person or vehicle."`,
-          es: `"Buenas tardes, oficial. Entiendo que me ha detenido. ¿Soy libre de irme? Elijo permanecer en silencio y me gustaría hablar con un abogado. No consiento ningún registro de mi persona o vehículo."`
-        },
-        'questioning': {
-          en: `"I am exercising my right to remain silent. I would like to speak with an attorney before answering any questions. Am I under arrest or am I free to leave?"`,
-          es: `"Estoy ejerciendo mi derecho a permanecer en silencio. Me gustaría hablar con un abogado antes de responder cualquier pregunta. ¿Estoy arrestado o soy libre de irme?"`
-        },
-        'search-request': {
-          en: `"I do not consent to any search of my person, belongings, or property. I am exercising my Fourth Amendment rights. Please state clearly if this is a lawful order or a request."`,
-          es: `"No consiento ningún registro de mi persona, pertenencias o propiedad. Estoy ejerciendo mis derechos de la Cuarta Enmienda. Por favor, declare claramente si esto es una orden legal o una solicitud."`
-        },
-        'arrest': {
-          en: `"I am invoking my right to remain silent and my right to an attorney. I will not answer any questions without my lawyer present. Please ensure this interaction is being recorded."`,
-          es: `"Estoy invocando mi derecho a permanecer en silencio y mi derecho a un abogado. No responderé ninguna pregunta sin mi abogado presente. Por favor, asegúrese de que esta interacción esté siendo grabada."`
-        },
-        'stop-and-frisk': {
-          en: `"Am I being detained or am I free to leave? I do not consent to this search. I am not resisting, but I do not consent. I want to speak with an attorney."`,
-          es: `"¿Estoy siendo detenido o soy libre de irme? No consiento este registro. No me estoy resistiendo, pero no consiento. Quiero hablar con un abogado."`
-        }
-      }
-
-      const script = scripts[scenario]?.[selectedLanguage] || scripts[scenario]?.en || "Script not available"
+      const script = await scriptService.generateScript(
+        scenario, 
+        selectedState, 
+        selectedLanguage, 
+        customContext
+      )
       setGeneratedScript(script)
     } catch (error) {
       console.error('Error generating script:', error)
@@ -116,6 +100,23 @@ const ScriptGenerator = ({ selectedState, language }) => {
             </button>
           ))}
         </div>
+      </div>
+
+      {/* Custom Context */}
+      <div className="mb-6">
+        <label className="block text-sm font-medium text-gray-700 mb-2">
+          Additional Context (Optional)
+        </label>
+        <textarea
+          value={customContext}
+          onChange={(e) => setCustomContext(e.target.value)}
+          className="w-full p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-primary focus:border-transparent resize-none"
+          rows="2"
+          placeholder="Describe any specific circumstances or concerns..."
+        />
+        <p className="mt-1 text-xs text-gray-500">
+          This helps generate more personalized and relevant scripts for your situation.
+        </p>
       </div>
 
       {/* Generate Button */}
